@@ -128,7 +128,7 @@ export default async function Dashboard() {
           series={[
             ...regimes.regimes.map((r) => ({ id: r.id, name: r.name, color: REGIME_COLORS[r.id], values: regimes.history.scores[r.id] })),
             {
-              id: "spx", name: "S&P 500", color: "var(--ink-2)", lineWidth: 1 as const, leftAxis: true, optional: true, format: "level" as const,
+              id: "spx", name: "S&P 500", color: "var(--s5)", lineWidth: 1 as const, leftAxis: true, optional: true, format: "level" as const,
               values: asOf(market.data.SP500 ?? [], regimes.history.dates, 7),
             },
           ]}
