@@ -1,7 +1,9 @@
 import ActivePlaybook from "@/components/ActivePlaybook";
+import BondChart from "@/components/BondChart";
+import TvChart from "@/components/TvChart";
 import RegimeHistoryChart from "@/components/RegimeHistoryChart";
 import Sparkline from "@/components/Sparkline";
-import { getAuctionData, getMarket } from "@/lib/data";
+import { getAuctionData, getHistoryCharts, getMarket } from "@/lib/data";
 import { dateLabel, fmt, money, REGIME_COLORS, signed, STATUS_ICON } from "@/lib/format";
 import { LEVELS, type RegimeResult } from "@/lib/regimes";
 
@@ -75,6 +77,15 @@ function RegimeCard({ r }: { r: RegimeResult }) {
 
 export default async function Dashboard() {
   const [market, auctions] = await Promise.all([getMarket(), getAuctionData()]);
+  const history = await getHistoryCharts(market.data);
+  const lastOf = (a: number[]) => { for (let i = a.length - 1; i >= 0; i--) if (Number.isFinite(a[i])) return { v: a[i], i }; return { v: NaN, i: -1 }; };
+  const yearAgo = (dates: string[], values: number[]) => {
+    const { i } = lastOf(values);
+    if (i < 0) return NaN;
+    const target = new Date(Date.parse(dates[i]) - 365 * 86400000).toISOString().slice(0, 10);
+    const j = dates.findIndex((d) => d >= target);
+    return j >= 0 ? values[j] : NaN;
+  };
   const { regimes, indicators } = market;
   const top = [...regimes.regimes].sort((a, b) => b.score - a.score)[0];
 
@@ -118,6 +129,71 @@ export default async function Dashboard() {
           events={regimes.events.map((e) => ({ date: e.date, label: e.label }))}
           height={600}
         />
+      </div>
+
+      <div className="section card">
+        <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <h2>Treasury bond prices</h2>
+          {(() => {
+            const t = history.bonds.tenors.find((x) => x.id === "30y");
+            if (!t) return null;
+            const now = lastOf(t.prices).v, ago = yearAgo(history.bonds.dates, t.prices);
+            return Number.isFinite(now) && Number.isFinite(ago)
+              ? <span className="small ink2">30-year price {signed((100 * (now - ago)) / ago, 1)}% over 12 months</span>
+              : null;
+          })()}
+        </div>
+        <BondChart dates={history.bonds.dates} tenors={history.bonds.tenors} />
+      </div>
+
+      <div className="section card">
+        <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <h2>Federal debt</h2>
+          {history.debt && (() => {
+            const now = lastOf(history.debt.total).v, ago = yearAgo(history.debt.dates, history.debt.total);
+            return <span className="small ink2">${fmt(now, 2)}T total · {Number.isFinite(ago) ? `${now >= ago ? "+" : "−"}${money(Math.abs(now - ago) * 1e12)} over 12 months` : ""}</span>;
+          })()}
+        </div>
+        {history.debt ? (
+          <TvChart
+            dates={history.debt.dates}
+            series={[
+              { id: "total", name: "Total public debt", color: "var(--s1)", values: history.debt.total },
+              { id: "public", name: "Held by the public", color: "var(--s2)", values: history.debt.public },
+            ]}
+            persistKey="debt-chart"
+            ariaLabel="Federal debt outstanding"
+            format="trillions"
+            defaultRange="All"
+            height={380}
+            help="Daily, from Treasury's Debt to the Penny. Total includes debt held by trust funds (Social Security etc.); held by the public is what trades in the market."
+          />
+        ) : <p className="small muted">Debt data unavailable right now.</p>}
+      </div>
+
+      <div className="section card">
+        <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <h2>Interest payments</h2>
+          {history.interest && (() => {
+            const now = lastOf(history.interest.public12m).v, ago = yearAgo(history.interest.dates, history.interest.public12m);
+            return <span className="small ink2">${fmt(now * 1000, 0)}B on public debt over the last 12 months · {Number.isFinite(ago) ? `${signed((100 * (now - ago)) / ago, 0)}% vs a year earlier` : ""}</span>;
+          })()}
+        </div>
+        {history.interest ? (
+          <TvChart
+            dates={history.interest.dates}
+            series={[
+              { id: "public", name: "Interest on public debt", color: "var(--s1)", values: history.interest.public12m },
+              { id: "total", name: "Incl. trust-fund interest", color: "var(--s2)", values: history.interest.total12m },
+            ]}
+            persistKey="interest-chart"
+            ariaLabel="Federal interest expense, trailing 12 months"
+            format="trillions"
+            defaultRange="All"
+            height={380}
+            help="Trailing 12-month totals of monthly interest expense (Treasury FiscalData), so seasonality doesn't hide the trend. Interest to trust funds is paid to the government itself."
+          />
+        ) : <p className="small muted">Interest data unavailable right now.</p>}
       </div>
 
       <div className="section">

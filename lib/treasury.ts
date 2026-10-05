@@ -174,3 +174,59 @@ export async function getMaturityProfile(): Promise<MaturityProfile | null> {
   });
   return buildMaturityProfile(rows, recordDate);
 }
+
+// ---------- History series for the dashboard charts ----------
+
+export type DebtHistory = { dates: string[]; total: number[]; public: number[] };
+
+/** Daily total public debt and debt held by the public ($), from Debt to the Penny. */
+export async function getDebtHistory(since = "2006-01-01"): Promise<DebtHistory> {
+  const rows = await fiscal<RawAuction>("/v2/accounting/od/debt_to_penny", {
+    filter: `record_date:gte:${since}`,
+    fields: "record_date,tot_pub_debt_out_amt,debt_held_public_amt",
+    sort: "record_date",
+    "page[size]": "10000",
+  });
+  const out: DebtHistory = { dates: [], total: [], public: [] };
+  for (const r of rows) {
+    const total = num(r.tot_pub_debt_out_amt);
+    if (total == null) continue;
+    out.dates.push(r.record_date);
+    out.total.push(total);
+    out.public.push(num(r.debt_held_public_amt) ?? NaN);
+  }
+  return out;
+}
+
+export type InterestHistory = {
+  /** Month-end dates. */
+  dates: string[];
+  /** Interest on debt held by the public in that month ($). */
+  publicMonthly: number[];
+  /** Interest credited to trust funds and other government accounts in that month ($). */
+  intragovMonthly: number[];
+};
+
+/** Monthly federal interest expense (Treasury "Interest Expense on the Public Debt Outstanding"). */
+export async function getInterestHistory(): Promise<InterestHistory> {
+  const rows = await fiscal<RawAuction>("/v2/accounting/od/interest_expense", {
+    fields: "record_date,expense_catg_desc,month_expense_amt",
+    sort: "record_date",
+    "page[size]": "10000",
+  });
+  const byMonth = new Map<string, { pub: number; gov: number }>();
+  for (const r of rows) {
+    const amt = num(r.month_expense_amt);
+    if (amt == null) continue;
+    const m = byMonth.get(r.record_date) ?? { pub: 0, gov: 0 };
+    if (r.expense_catg_desc.includes("PUBLIC ISSUES")) m.pub += amt;
+    else m.gov += amt;
+    byMonth.set(r.record_date, m);
+  }
+  const dates = [...byMonth.keys()].sort();
+  return {
+    dates,
+    publicMonthly: dates.map((d) => byMonth.get(d)!.pub),
+    intragovMonthly: dates.map((d) => byMonth.get(d)!.gov),
+  };
+}

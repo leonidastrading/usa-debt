@@ -87,3 +87,13 @@ test("higher rates mean a higher interest bill", () => {
   // Debt grows by roughly the deficit each year.
   assert.ok(frozen[0].debt > profile.totalMarketable);
 });
+
+test("bond price: par at its own yield, falls when yields rise", async () => {
+  const { bondPrice, priceIndex } = await import("./bonds.ts");
+  assert.ok(Math.abs(bondPrice(4.5, 4.5, 10) - 100) < 1e-9);
+  // A 10Y par bond loses roughly duration (~8) × 1% ≈ 7.7% for +100bp.
+  const p = bondPrice(4.5, 5.5, 10);
+  assert.ok(p > 91 && p < 93, String(p));
+  const idx = priceIndex([{ date: "a", value: 4 }, { date: "b", value: 5 }, { date: "c", value: 4 }], 30);
+  assert.ok(idx[1].value < 100 && idx[2].value > idx[1].value);
+});
