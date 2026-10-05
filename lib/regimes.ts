@@ -190,7 +190,7 @@ export type RegimeResult = {
 export type RegimeOutput = {
   asOf: string;
   regimes: RegimeResult[];
-  /** Weekly-sampled history for charts: dates + one score array per regime. */
+  /** Daily history for charts: dates + one score array per regime. */
   history: { dates: string[]; scores: Record<string, number[]> };
   events: { date: string; label: string; expect: string; peaks: Record<string, number> }[];
 };
@@ -251,13 +251,11 @@ export function computeRegimes(data: FredData): RegimeOutput {
     });
   }
 
-  // Weekly sample (every 5th trading day, always including the last day) for the chart.
-  const idx: number[] = [];
-  for (let i = n - 1; i >= 0; i -= 5) idx.unshift(i);
+  // Every trading day, rounded to 0.1 to keep the page payload small.
   const history = {
-    dates: idx.map((i) => frame.dates[i]),
+    dates: frame.dates,
     scores: Object.fromEntries(
-      Object.entries(scores).map(([k, v]) => [k, idx.map((i) => (Number.isFinite(v[i]) ? Math.round(v[i] * 10) / 10 : NaN))]),
+      Object.entries(scores).map(([k, v]) => [k, v.map((x) => (Number.isFinite(x) ? Math.round(x * 10) / 10 : NaN))]),
     ),
   };
 

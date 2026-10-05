@@ -121,14 +121,14 @@ export default async function Dashboard() {
       <div className="section card">
         <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
           <h2>Regime history</h2>
-          <span className="small muted">Weekly samples · hover for values · dashed lines at 85 and 95</span>
+          <span className="small muted">Daily · hover for values · dashed lines at 85 and 95</span>
         </div>
         <RegimeHistoryChart
           dates={regimes.history.dates}
           series={[
             ...regimes.regimes.map((r) => ({ id: r.id, name: r.name, color: REGIME_COLORS[r.id], values: regimes.history.scores[r.id] })),
             {
-              id: "spx", name: "S&P 500", color: "var(--s5)", lineWidth: 1 as const, leftAxis: true, optional: true, format: "level" as const,
+              id: "spx", name: "S&P 500", color: "var(--s5)", lineWidth: 2 as const, dashed: true, leftAxis: true, optional: true, format: "level" as const,
               values: asOf(market.data.SP500 ?? [], regimes.history.dates, 7),
             },
           ]}

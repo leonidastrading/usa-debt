@@ -19,6 +19,7 @@ export type TvSeries = {
   /** Legend/axis format for this series, if different from the chart's. */
   format?: TvFormat;
   lineWidth?: 1 | 2 | 3;
+  dashed?: boolean;
 };
 
 export type TvFormat = "score" | "pct" | "trillions" | "index" | "level";
@@ -153,6 +154,7 @@ export default function TvChart({
           const line = chart.addSeries(lw.LineSeries, {
             color: resolve(s.color),
             lineWidth: s.lineWidth ?? 2,
+            lineStyle: s.dashed ? lw.LineStyle.Dashed : lw.LineStyle.Solid,
             priceLineVisible: false,
             lastValueVisible: true,
             title: "",
@@ -271,7 +273,12 @@ export default function TvChart({
               onClick={() => toggle(s)}
               title={s.optional ? `Show or hide ${s.name}` : undefined}
             >
-              <span className="line-key" style={{ background: s.color }} />
+              <span
+                className="line-key"
+                style={s.dashed
+                  ? { background: `repeating-linear-gradient(90deg, ${s.color} 0 4px, transparent 4px 7px)` }
+                  : { background: s.color }}
+              />
               {s.name}
               <strong className="num" style={{ color: "var(--ink)", minWidth: 20 }}>
                 {Number.isFinite(shown[s.id]) ? (s.format ? FORMATS[s.format] : fmt).legend(shown[s.id]) : "–"}
