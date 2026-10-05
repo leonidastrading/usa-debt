@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { fmt, money, signed } from "@/lib/format";
+import { usePersisted } from "@/lib/usePersisted";
 import { addDays, legValue, portfolioValue, SPX_MULTIPLIER, stressGrid, type MarketState, type OptionLeg } from "@/lib/options";
 
-const LEGS_KEY = "ust-monitor:legs:v1";
 const MOVES = [-30, -20, -15, -10, -5, 0, 5, 10];
 const VOL_MULTS = [0.8, 1, 1.5, 2, 3];
 
@@ -34,21 +34,14 @@ function cellColor(v: number, max: number) {
 }
 
 export default function PortfolioStress({ spot: spot0, vix, shortRate, today }: { spot: number; vix: number; shortRate: number; today: string }) {
-  const [market, setMarket] = useState<MarketState>({
-    spot: Math.round(spot0), atmVol: vix / 100, rate: shortRate / 100, divYield: 0.013, skew: 3, asOf: today,
-  });
-  const [legs, setLegs] = useState<OptionLeg[]>(() => defaultLegs(spot0, today));
-  const [days, setDays] = useState(7);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LEGS_KEY);
-      if (raw) setLegs(JSON.parse(raw) as OptionLeg[]);
-    } catch { /* ignore */ }
-  }, []);
-  useEffect(() => {
-    try { localStorage.setItem(LEGS_KEY, JSON.stringify(legs)); } catch { /* ignore */ }
-  }, [legs]);
+  // Live inputs from FRED; anything you type over is remembered as an override.
+  const live = { spot: Math.round(spot0), atmVol: vix / 100, rate: shortRate / 100, divYield: 0.013, skew: 3 };
+  type Inputs = typeof live;
+  const [overrides, setOverrides] = usePersisted<Partial<Inputs>>("hedge:market", {});
+  const market: MarketState = { ...live, ...overrides, asOf: today };
+  const setField = (k: keyof Inputs, v: number) => setOverrides((o) => ({ ...o, [k]: v }));
+  const [legs, setLegs] = usePersisted<OptionLeg[]>("legs:v1", defaultLegs(spot0, today));
+  const [days, setDays] = usePersisted("hedge:days", 7);
 
   const value = portfolioValue(legs, market);
   const grid = useMemo(() => stressGrid(legs, market, MOVES, VOL_MULTS, days), [legs, market, days]);
@@ -70,13 +63,18 @@ export default function PortfolioStress({ spot: spot0, vix, shortRate, today }: 
       <div className="grid grid-2">
         <div className="card">
           <h3>Market inputs</h3>
-          <p className="small muted" style={{ margin: "2px 0 10px" }}>Pre-filled from FRED (S&P 500, VIX, 3M bill). Override with your broker's numbers.</p>
+          <p className="small muted" style={{ margin: "2px 0 10px" }}>
+            Pre-filled from FRED (S&amp;P 500, VIX, 3M bill). Values you type are remembered.
+            {Object.keys(overrides).length > 0 && (
+              <> <button className="btn ghost" style={{ padding: "0 4px" }} onClick={() => setOverrides({})}>Use live data</button></>
+            )}
+          </p>
           <div className="row">
-            <label className="field">SPX<input type="number" value={market.spot} onChange={(e) => setMarket({ ...market, spot: num(e.target.value) })} /></label>
-            <label className="field">ATM vol %<input type="number" step={0.5} value={Math.round(market.atmVol * 1000) / 10} onChange={(e) => setMarket({ ...market, atmVol: num(e.target.value) / 100 })} /></label>
-            <label className="field">Rate %<input type="number" step={0.1} value={Math.round(market.rate * 1000) / 10} onChange={(e) => setMarket({ ...market, rate: num(e.target.value) / 100 })} /></label>
-            <label className="field">Div yield %<input type="number" step={0.1} value={Math.round(market.divYield * 1000) / 10} onChange={(e) => setMarket({ ...market, divYield: num(e.target.value) / 100 })} /></label>
-            <label className="field" title="How much more vol OTM puts carry: vol(K) = ATM × (1 + skew × ln(S/K)). 3 ≈ typical SPX.">Skew<input type="number" step={0.5} value={market.skew} onChange={(e) => setMarket({ ...market, skew: num(e.target.value) })} /></label>
+            <label className="field">SPX<input type="number" value={market.spot} onChange={(e) => setField("spot", num(e.target.value))} /></label>
+            <label className="field">ATM vol %<input type="number" step={0.5} value={Math.round(market.atmVol * 1000) / 10} onChange={(e) => setField("atmVol", num(e.target.value) / 100)} /></label>
+            <label className="field">Rate %<input type="number" step={0.1} value={Math.round(market.rate * 1000) / 10} onChange={(e) => setField("rate", num(e.target.value) / 100)} /></label>
+            <label className="field">Div yield %<input type="number" step={0.1} value={Math.round(market.divYield * 1000) / 10} onChange={(e) => setField("divYield", num(e.target.value) / 100)} /></label>
+            <label className="field" title="How much more vol OTM puts carry: vol(K) = ATM × (1 + skew × ln(S/K)). 3 ≈ typical SPX.">Skew<input type="number" step={0.5} value={market.skew} onChange={(e) => setField("skew", num(e.target.value))} /></label>
           </div>
         </div>
         <div className="card">

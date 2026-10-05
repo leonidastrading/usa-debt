@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { NewsItem } from "@/lib/news";
+import { usePersisted } from "@/lib/usePersisted";
 
 function ago(iso: string) {
   if (!iso) return "";
@@ -12,7 +13,7 @@ function ago(iso: string) {
 }
 
 export default function NewsList({ items, topics }: { items: NewsItem[]; topics: { id: string; label: string }[] }) {
-  const [topic, setTopic] = useState("all");
+  const [topic, setTopic] = usePersisted("news:topic", "all");
   const [limit, setLimit] = useState(50);
   const shown = topic === "all" ? items : items.filter((i) => i.topic === topic);
   const label = Object.fromEntries(topics.map((t) => [t.id, t.label]));

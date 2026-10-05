@@ -8,13 +8,14 @@ type R = { id: string; name: string; tagline: string; score: number; alertRate: 
 
 export default function PlaybookEditor({ regimes }: { regimes: R[] }) {
   const [pb, setPb] = useState<Playbook>(DEFAULT_PLAYBOOK);
-  const [saved, setSaved] = useState(true);
   useEffect(() => setPb(loadPlaybook()), []);
 
-  const set = (id: string, patch: Partial<Playbook[string]>) => {
-    setPb((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
-    setSaved(false);
+  // Every edit is saved immediately.
+  const update = (next: Playbook) => {
+    setPb(next);
+    savePlaybook(next);
   };
+  const set = (id: string, patch: Partial<Playbook[string]>) => update({ ...pb, [id]: { ...pb[id], ...patch } });
 
   return (
     <div>
@@ -42,10 +43,8 @@ export default function PlaybookEditor({ regimes }: { regimes: R[] }) {
         ))}
       </div>
       <div className="row" style={{ marginTop: 16 }}>
-        <button className="btn primary" onClick={() => { savePlaybook(pb); setSaved(true); }} disabled={saved}>
-          {saved ? "Saved" : "Save playbook"}
-        </button>
-        <button className="btn ghost" onClick={() => { setPb(DEFAULT_PLAYBOOK); setSaved(false); }}>Restore defaults</button>
+        <span className="small muted">Changes save automatically in this browser.</span>
+        <button className="btn ghost" onClick={() => { if (confirm("Replace your playbook with the defaults?")) update(DEFAULT_PLAYBOOK); }}>Restore defaults</button>
       </div>
       <p className="small muted" style={{ marginTop: 12 }}>
         Tip: a threshold of 85 fires on roughly 1 day in 7 historically, 95 on roughly 1 in 20. If a playbook fires every week you will stop reading it;

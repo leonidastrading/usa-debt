@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import LineChart from "@/components/LineChart";
 import { dateLabel, fmt, money } from "@/lib/format";
+import { usePersisted } from "@/lib/usePersisted";
 import { currentInterest, DEFAULT_MIX, ISSUANCE_TENORS, project, SCENARIOS, type Curve, type Scenario } from "@/lib/rollover";
 import type { MaturityProfile } from "@/lib/treasury";
 
@@ -60,12 +61,12 @@ function MaturityWall({ profile }: { profile: MaturityProfile }) {
 }
 
 export default function DebtRollover({ profile, curve, gdp }: { profile: MaturityProfile; curve: Curve; gdp: { date: string; value: number } }) {
-  const [selected, setSelected] = useState<string[]>(["frozen", "cuts", "steepener", "crisis"]);
-  const [metric, setMetric] = useState("interest");
-  const [custom, setCustom] = useState<Scenario>({
+  const [selected, setSelected] = usePersisted<string[]>("rollover:selected", ["frozen", "cuts", "steepener", "crisis"]);
+  const [metric, setMetric] = usePersisted("rollover:metric", "interest");
+  const [custom, setCustom] = usePersisted<Scenario>("rollover:custom", {
     id: "custom", name: "Custom", description: "Your own shock.", shiftBp: [50, 100, 150, 150], rampYears: 2, primaryDeficitPct: 3.5, nominalGrowthPct: 4,
   });
-  const [mix, setMix] = useState<number[]>(DEFAULT_MIX);
+  const [mix, setMix] = usePersisted<number[]>("rollover:mix", DEFAULT_MIX);
 
   const all = [...SCENARIOS, custom];
   const results = useMemo(
@@ -76,7 +77,7 @@ export default function DebtRollover({ profile, curve, gdp }: { profile: Maturit
   const now = currentInterest(profile);
   const in12m = profile.buckets.find((b) => b.yearIndex === 0)?.amount ?? 0;
   const year0 = Number(profile.recordDate.slice(0, 4));
-  const m = METRICS.find((x) => x.id === metric)!;
+  const m = METRICS.find((x) => x.id === metric) ?? METRICS[0];
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   const setShift = (i: number, v: number) => setCustom((c) => {

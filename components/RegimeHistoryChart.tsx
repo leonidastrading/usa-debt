@@ -4,6 +4,7 @@
 // the alert levels and markers for past stress events.
 import { useEffect, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi, Time } from "lightweight-charts";
+import { usePersisted } from "@/lib/usePersisted";
 
 type Series = { id: string; name: string; color: string; values: number[] };
 
@@ -42,14 +43,22 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
   const box = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
-  const [range, setRange] = useState("3Y");
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // Remembered across visits: preset range ("custom" after a manual zoom/pan), the exact
+  // custom window, and which series are switched off.
+  const [range, setRange] = usePersisted("regime-chart:range", "3Y");
+  const [view, setView] = usePersisted<{ from: string; to: string } | null>("regime-chart:view", null);
+  const [hiddenList, setHiddenList] = usePersisted<string[]>("regime-chart:hidden", []);
+  const hidden = new Set(hiddenList);
   const [hover, setHover] = useState<{ date: string; values: Record<string, number> } | null>(null);
   // Mirrors of state for use inside the chart's (re)build callback.
   const rangeRef = useRef(range);
+  const viewRef = useRef(view);
   const hiddenRef = useRef(hidden);
   rangeRef.current = range;
+  viewRef.current = view;
   hiddenRef.current = hidden;
+  // Range changes we make ourselves (presets, rebuilds, resizes) are not user zooms.
+  const quietUntil = useRef(0);
 
   // Build the chart once; rebuild if the data or the colour scheme changes.
   useEffect(() => {
@@ -71,9 +80,9 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
           grid: { vertLines: { visible: false }, horzLines: { color: t.grid } },
           rightPriceScale: { borderColor: t.axis, scaleMargins: { top: 0.06, bottom: 0.04 } },
           timeScale: { borderColor: t.axis, rightOffset: 2 },
-          // Leave the mouse wheel to the page; pan by dragging, zoom by pinch or axis drag.
-          handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-          handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: { time: true, price: false } },
+          // Mouse wheel zooms, drag pans, pinch zooms on touch.
+          handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+          handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: { time: true, price: false } },
           crosshair: {
             mode: lw.CrosshairMode.Magnet,
             vertLine: { color: t.ink, labelBackgroundColor: t.ink },
@@ -119,6 +128,17 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
           setHover({ date: String(p.time), values });
         });
 
+        // Remember manual zooms/pans (debounced) as a "custom" window.
+        let saveTimer: ReturnType<typeof setTimeout> | undefined;
+        chart.timeScale().subscribeVisibleTimeRangeChange((r) => {
+          if (!r || Date.now() < quietUntil.current) return;
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(() => {
+            setView({ from: String(r.from), to: String(r.to) });
+            setRange("custom");
+          }, 400);
+        });
+
         chartRef.current = chart;
         seriesRef.current = map;
         applyRange(rangeRef.current);
@@ -130,7 +150,10 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
       const mq = window.matchMedia("(prefers-color-scheme: dark)");
       const onScheme = () => { chart.remove(); chart = build(); };
       mq.addEventListener("change", onScheme);
-      cleanup = () => { mq.removeEventListener("change", onScheme); chart.remove(); chartRef.current = null; };
+      // A resize shifts the visible window too; don't record that as a user zoom.
+      const ro = new ResizeObserver(() => { quietUntil.current = Date.now() + 600; });
+      ro.observe(el);
+      cleanup = () => { ro.disconnect(); mq.removeEventListener("change", onScheme); chart.remove(); chartRef.current = null; };
     })();
 
     return () => { disposed = true; cleanup(); };
@@ -139,6 +162,12 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
   function applyRange(id: string) {
     const chart = chartRef.current;
     if (!chart || !dates.length) return;
+    quietUntil.current = Date.now() + 600;
+    if (id === "custom") {
+      const v = viewRef.current;
+      if (v) chart.timeScale().setVisibleRange({ from: v.from as Time, to: v.to as Time });
+      return;
+    }
     const yrs = RANGES.find((r) => r.id === id)?.years ?? 0;
     if (!yrs) { chart.timeScale().fitContent(); return; }
     const last = dates[dates.length - 1];
@@ -151,7 +180,7 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
   }
 
   useEffect(() => applyRange(range), [range]);
-  useEffect(() => applyHidden(hidden), [hidden]);
+  useEffect(() => applyHidden(new Set(hiddenList)), [hiddenList]);
 
   const latest = Object.fromEntries(series.map((s) => {
     for (let i = s.values.length - 1; i >= 0; i--) if (Number.isFinite(s.values[i])) return [s.id, s.values[i]];
@@ -167,11 +196,7 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
             <button
               key={s.id}
               aria-pressed={!hidden.has(s.id)}
-              onClick={() => setHidden((prev) => {
-                const next = new Set(prev);
-                if (next.has(s.id)) next.delete(s.id); else next.add(s.id);
-                return next;
-              })}
+              onClick={() => setHiddenList((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]))}
             >
               <span className="line-key" style={{ background: s.color }} />
               {s.name}
@@ -184,12 +209,12 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
         </div>
         <div className="seg" role="group" aria-label="Range">
           {RANGES.map((r) => (
-            <button key={r.id} aria-pressed={range === r.id} onClick={() => setRange(r.id)}>{r.id}</button>
+            <button key={r.id} aria-pressed={range === r.id} onClick={() => { setView(null); setRange(r.id); if (range === r.id) applyRange(r.id); }}>{r.id}</button>
           ))}
         </div>
       </div>
       <div ref={box} style={{ height, width: "100%", position: "relative" }} role="img" aria-label="Regime scores over time" />
-      <p className="small muted" style={{ marginTop: 8 }}>Drag to pan; drag the date axis or pinch to zoom; double-click the axis to reset. Arrows mark past stress events.</p>
+      <p className="small muted" style={{ marginTop: 8 }}>Scroll to zoom, drag to pan, pick a range button to reset. Your zoom and series choices are remembered. Arrows mark past stress events.</p>
     </div>
   );
 }
