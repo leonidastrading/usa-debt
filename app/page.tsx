@@ -128,8 +128,13 @@ export default async function Dashboard() {
           series={[
             ...regimes.regimes.map((r) => ({ id: r.id, name: r.name, color: REGIME_COLORS[r.id], values: regimes.history.scores[r.id] })),
             {
-              id: "spx", name: "S&P 500", color: "var(--s5)", lineWidth: 2 as const, dashed: true, leftAxis: true, optional: true, format: "level" as const,
+              id: "spx", name: "S&P 500", color: "var(--s5)", lineWidth: 2 as const, lineStyle: "dashed" as const, leftAxis: true, optional: true, format: "level" as const,
               values: asOf(market.data.SP500 ?? [], regimes.history.dates, 7),
+            },
+            {
+              // VIX lives in the same 10–85 band, so it shares the 0–100 score axis.
+              id: "vix", name: "VIX", color: "var(--s7)", lineWidth: 2 as const, lineStyle: "dotted" as const, optional: true, format: "index" as const,
+              values: asOf(market.data.VIXCLS ?? [], regimes.history.dates, 7),
             },
           ]}
           events={regimes.events.map((e) => ({ date: e.date, label: e.label }))}

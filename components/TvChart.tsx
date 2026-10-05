@@ -19,7 +19,7 @@ export type TvSeries = {
   /** Legend/axis format for this series, if different from the chart's. */
   format?: TvFormat;
   lineWidth?: 1 | 2 | 3;
-  dashed?: boolean;
+  lineStyle?: "solid" | "dashed" | "dotted";
 };
 
 export type TvFormat = "score" | "pct" | "trillions" | "index" | "level";
@@ -154,7 +154,7 @@ export default function TvChart({
           const line = chart.addSeries(lw.LineSeries, {
             color: resolve(s.color),
             lineWidth: s.lineWidth ?? 2,
-            lineStyle: s.dashed ? lw.LineStyle.Dashed : lw.LineStyle.Solid,
+            lineStyle: s.lineStyle === "dashed" ? lw.LineStyle.Dashed : s.lineStyle === "dotted" ? lw.LineStyle.Dotted : lw.LineStyle.Solid,
             priceLineVisible: false,
             lastValueVisible: true,
             title: "",
@@ -275,9 +275,11 @@ export default function TvChart({
             >
               <span
                 className="line-key"
-                style={s.dashed
+                style={s.lineStyle === "dashed"
                   ? { background: `repeating-linear-gradient(90deg, ${s.color} 0 4px, transparent 4px 7px)` }
-                  : { background: s.color }}
+                  : s.lineStyle === "dotted"
+                    ? { background: `repeating-linear-gradient(90deg, ${s.color} 0 2px, transparent 2px 4px)` }
+                    : { background: s.color }}
               />
               {s.name}
               <strong className="num" style={{ color: "var(--ink)", minWidth: 20 }}>
