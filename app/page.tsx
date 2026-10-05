@@ -1,5 +1,5 @@
 import ActivePlaybook from "@/components/ActivePlaybook";
-import LineChart from "@/components/LineChart";
+import RegimeHistoryChart from "@/components/RegimeHistoryChart";
 import Sparkline from "@/components/Sparkline";
 import { getAuctionData, getMarket } from "@/lib/data";
 import { dateLabel, fmt, money, REGIME_COLORS, signed, STATUS_ICON } from "@/lib/format";
@@ -110,19 +110,13 @@ export default async function Dashboard() {
       <div className="section card">
         <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
           <h2>Regime history</h2>
-          <span className="small muted">Weekly samples · dashed lines mark past stress events</span>
+          <span className="small muted">Weekly samples · hover for values · dashed lines at 85 and 95</span>
         </div>
-        <LineChart
-          ariaLabel="Regime scores over time"
-          x={regimes.history.dates}
+        <RegimeHistoryChart
+          dates={regimes.history.dates}
           series={regimes.regimes.map((r) => ({ id: r.id, name: r.name, color: REGIME_COLORS[r.id], values: regimes.history.scores[r.id] }))}
-          yMin={0}
-          yMax={100}
-          refLines={[{ y: 85, label: "Elevated 85" }, { y: 95, label: "Alert 95" }]}
-          markers={regimes.events.map((e) => ({ x: e.date, label: e.label }))}
-          format="score"
-          ranges
-          height={300}
+          events={regimes.events.map((e) => ({ date: e.date, label: e.label }))}
+          height={600}
         />
       </div>
 
