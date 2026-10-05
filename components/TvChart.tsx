@@ -7,9 +7,21 @@ import { useEffect, useRef, useState } from "react";
 import type { IChartApi, ISeriesApi, Time } from "lightweight-charts";
 import { usePersisted } from "@/lib/usePersisted";
 
-export type TvSeries = { id: string; name: string; color: string; values: number[] };
+export type TvSeries = {
+  id: string;
+  name: string;
+  color: string;
+  values: number[];
+  /** Plot on its own left-hand axis (for a series on a different scale). */
+  leftAxis?: boolean;
+  /** Hidden until the user switches it on. */
+  optional?: boolean;
+  /** Legend/axis format for this series, if different from the chart's. */
+  format?: TvFormat;
+  lineWidth?: 1 | 2 | 3;
+};
 
-export type TvFormat = "score" | "pct" | "trillions" | "index";
+export type TvFormat = "score" | "pct" | "trillions" | "index" | "level";
 
 type Props = {
   dates: string[];
@@ -38,6 +50,7 @@ const FORMATS: Record<TvFormat, { axis: (v: number) => string; legend: (v: numbe
   pct: { axis: (v) => `${v.toFixed(2)}%`, legend: (v) => `${v.toFixed(2)}%` },
   trillions: { axis: (v) => `$${v.toFixed(v < 10 ? 2 : 1)}T`, legend: (v) => `$${v.toFixed(2)}T` },
   index: { axis: (v) => v.toFixed(1), legend: (v) => v.toFixed(1) },
+  level: { axis: (v) => Math.round(v).toLocaleString("en-US"), legend: (v) => Math.round(v).toLocaleString("en-US") },
 };
 
 const RANGES = [
@@ -77,7 +90,13 @@ export default function TvChart({
   const [range, setRange] = usePersisted(`${persistKey}:range`, defaultRange);
   const [view, setView] = usePersisted<{ from: string; to: string } | null>(`${persistKey}:view`, null);
   const [hiddenList, setHiddenList] = usePersisted<string[]>(`${persistKey}:hidden`, []);
-  const hidden = new Set(hiddenList);
+  // Optional series are tracked the other way round: off unless switched on.
+  const [shownList, setShownList] = usePersisted<string[]>(`${persistKey}:shown`, []);
+  const hidden = new Set(series.filter((s) => (s.optional ? !shownList.includes(s.id) : hiddenList.includes(s.id))).map((s) => s.id));
+  const toggle = (s: TvSeries) => {
+    const flip = (prev: string[]) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]);
+    if (s.optional) setShownList(flip); else setHiddenList(flip);
+  };
   const [hover, setHover] = useState<{ date: string; values: Record<string, number> } | null>(null);
   // Index of the first visible bar; in "indexed" mode legend values are rebased to it, like the axis.
   const [baseIdx, setBaseIdx] = useState(0);
@@ -114,6 +133,7 @@ export default function TvChart({
             scaleMargins: { top: 0.06, bottom: 0.04 },
             mode: priceMode === "indexed" ? lw.PriceScaleMode.IndexedTo100 : lw.PriceScaleMode.Normal,
           },
+          leftPriceScale: { visible: false, borderColor: t.axis, scaleMargins: { top: 0.06, bottom: 0.04 } },
           // Allow very dense bars so "All" can fit 20 years of daily data.
           timeScale: { borderColor: t.axis, rightOffset: 2, minBarSpacing: 0.01 },
           // Mouse wheel zooms, drag pans, pinch zooms on touch.
@@ -129,13 +149,16 @@ export default function TvChart({
 
         const map = new Map<string, ISeriesApi<"Line">>();
         series.forEach((s, k) => {
+          const own = s.format ? FORMATS[s.format] : null;
           const line = chart.addSeries(lw.LineSeries, {
             color: resolve(s.color),
-            lineWidth: 2,
+            lineWidth: s.lineWidth ?? 2,
             priceLineVisible: false,
             lastValueVisible: true,
             title: "",
-            ...(fixedRange ? { autoscaleInfoProvider: () => ({ priceRange: { minValue: fixedRange[0], maxValue: fixedRange[1] } }) } : {}),
+            ...(s.leftAxis ? { priceScaleId: "left" } : {}),
+            ...(own ? { priceFormat: { type: "custom" as const, formatter: own.axis, minMove: 0.01 } } : {}),
+            ...(fixedRange && !s.leftAxis ? { autoscaleInfoProvider: () => ({ priceRange: { minValue: fixedRange[0], maxValue: fixedRange[1] } }) } : {}),
           });
           line.setData(
             dates.map((d, i) => (Number.isFinite(s.values[i]) ? { time: d as Time, value: s.values[i] } : { time: d as Time })),
@@ -217,10 +240,14 @@ export default function TvChart({
 
   function applyHidden(h: Set<string>) {
     for (const [id, line] of seriesRef.current) line.applyOptions({ visible: !h.has(id) });
+    // The left axis only appears while a series on it is visible.
+    const leftOn = series.some((s) => s.leftAxis && !h.has(s.id));
+    chartRef.current?.applyOptions({ leftPriceScale: { visible: leftOn } });
   }
 
   useEffect(() => applyRange(range), [range]);
-  useEffect(() => applyHidden(new Set(hiddenList)), [hiddenList]);
+  const hiddenKey = [...hidden].sort().join(",");
+  useEffect(() => applyHidden(new Set(hiddenKey ? hiddenKey.split(",") : [])), [hiddenKey]);
 
   const latest = Object.fromEntries(series.map((s) => {
     for (let i = s.values.length - 1; i >= 0; i--) if (Number.isFinite(s.values[i])) return [s.id, s.values[i]];
@@ -241,12 +268,13 @@ export default function TvChart({
             <button
               key={s.id}
               aria-pressed={!hidden.has(s.id)}
-              onClick={() => setHiddenList((prev) => (prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id]))}
+              onClick={() => toggle(s)}
+              title={s.optional ? `Show or hide ${s.name}` : undefined}
             >
               <span className="line-key" style={{ background: s.color }} />
               {s.name}
               <strong className="num" style={{ color: "var(--ink)", minWidth: 20 }}>
-                {Number.isFinite(shown[s.id]) ? fmt.legend(shown[s.id]) : "–"}
+                {Number.isFinite(shown[s.id]) ? (s.format ? FORMATS[s.format] : fmt).legend(shown[s.id]) : "–"}
               </strong>
             </button>
           ))}

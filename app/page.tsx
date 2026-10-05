@@ -5,6 +5,7 @@ import Sparkline from "@/components/Sparkline";
 import { getAuctionData, getHistoryCharts, getMarket } from "@/lib/data";
 import { BOND_COLORS, dateLabel, fmt, money, REGIME_COLORS, signed, STATUS_ICON } from "@/lib/format";
 import { LEVELS, type RegimeResult } from "@/lib/regimes";
+import { asOf } from "@/lib/stats";
 
 export const revalidate = 21600;
 
@@ -124,7 +125,13 @@ export default async function Dashboard() {
         </div>
         <RegimeHistoryChart
           dates={regimes.history.dates}
-          series={regimes.regimes.map((r) => ({ id: r.id, name: r.name, color: REGIME_COLORS[r.id], values: regimes.history.scores[r.id] }))}
+          series={[
+            ...regimes.regimes.map((r) => ({ id: r.id, name: r.name, color: REGIME_COLORS[r.id], values: regimes.history.scores[r.id] })),
+            {
+              id: "spx", name: "S&P 500", color: "var(--ink-2)", lineWidth: 1 as const, leftAxis: true, optional: true, format: "level" as const,
+              values: asOf(market.data.SP500 ?? [], regimes.history.dates, 7),
+            },
+          ]}
           events={regimes.events.map((e) => ({ date: e.date, label: e.label }))}
           height={600}
         />
