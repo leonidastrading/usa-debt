@@ -5,6 +5,12 @@ export const REGIME_COLORS: Record<string, string> = {
   growth: "var(--s4)",
 };
 
+export const BOND_COLORS: Record<string, string> = {
+  "2y": "var(--s3)",
+  "10y": "var(--s1)",
+  "30y": "var(--s2)",
+};
+
 export const STATUS_ICON: Record<string, string> = {
   good: "●",
   warning: "▲",

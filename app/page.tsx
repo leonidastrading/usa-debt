@@ -1,10 +1,9 @@
 import ActivePlaybook from "@/components/ActivePlaybook";
-import BondChart from "@/components/BondChart";
 import TvChart from "@/components/TvChart";
 import RegimeHistoryChart from "@/components/RegimeHistoryChart";
 import Sparkline from "@/components/Sparkline";
 import { getAuctionData, getHistoryCharts, getMarket } from "@/lib/data";
-import { dateLabel, fmt, money, REGIME_COLORS, signed, STATUS_ICON } from "@/lib/format";
+import { BOND_COLORS, dateLabel, fmt, money, REGIME_COLORS, signed, STATUS_ICON } from "@/lib/format";
 import { LEVELS, type RegimeResult } from "@/lib/regimes";
 
 export const revalidate = 21600;
@@ -143,7 +142,43 @@ export default async function Dashboard() {
               : null;
           })()}
         </div>
-        <BondChart dates={history.bonds.dates} tenors={history.bonds.tenors} />
+        <p className="small muted" style={{ marginBottom: 8, maxWidth: "75ch" }}>
+          Price of a Treasury held at constant maturity, rebased to 100 at the left edge of the view. A falling line means
+          bondholders are losing money; the 30-year moves most.
+        </p>
+        <TvChart
+          dates={history.bonds.dates}
+          series={history.bonds.tenors.map((t) => ({ id: t.id, name: t.name, color: BOND_COLORS[t.id], values: t.prices }))}
+          persistKey="bond-chart"
+          ariaLabel="Treasury bond price indices"
+          format="index"
+          priceMode="indexed"
+          height={420}
+          help="Scroll to zoom, drag to pan. Calculated from daily yields; excludes coupon income."
+        />
+      </div>
+
+      <div className="section card">
+        <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <h2>Treasury yields</h2>
+          {(() => {
+            const t = history.bonds.tenors.find((x) => x.id === "10y");
+            if (!t) return null;
+            const now = lastOf(t.yields).v, ago = yearAgo(history.bonds.dates, t.yields);
+            return Number.isFinite(now)
+              ? <span className="small ink2">10-year {fmt(now, 2)}%{Number.isFinite(ago) ? ` · ${signed((now - ago) * 100, 0)} bp over 12 months` : ""}</span>
+              : null;
+          })()}
+        </div>
+        <TvChart
+          dates={history.bonds.dates}
+          series={history.bonds.tenors.map((t) => ({ id: t.id, name: t.name, color: BOND_COLORS[t.id], values: t.yields }))}
+          persistKey="yield-chart"
+          ariaLabel="Treasury yields"
+          format="pct"
+          height={420}
+          help="Constant-maturity Treasury yields (FRED). Yields up = prices down."
+        />
       </div>
 
       <div className="section card">
