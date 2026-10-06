@@ -214,6 +214,10 @@ export default async function Dashboard() {
             { id: "upper", name: "Target, top", color: "var(--s1)", step: true, values: history.fed.upper },
             { id: "lower", name: "Target, bottom", color: "var(--s1)", step: true, lineStyle: "dashed", values: history.fed.lower },
             { id: "effr", name: "Effective fed funds", color: "var(--s2)", lineWidth: 1, values: history.fed.effective },
+            {
+              id: "spx", name: "S&P 500", color: "var(--s5)", lineWidth: 2, lineStyle: "dashed", leftAxis: true, optional: true, format: "level",
+              values: asOf(market.data.SP500 ?? [], history.fed.dates, 7),
+            },
           ]}
           persistKey="fed-chart"
           ariaLabel="Federal funds target range and effective rate"

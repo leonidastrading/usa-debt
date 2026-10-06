@@ -112,6 +112,7 @@ export default function TvChart({
   hiddenRef.current = hidden;
   // Range changes we make ourselves (presets, rebuilds, resizes) are not user zooms.
   const quietUntil = useRef(0);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Build the chart once; rebuild if the data or the colour scheme changes.
   useEffect(() => {
@@ -147,12 +148,13 @@ export default function TvChart({
             vertLine: { color: t.ink, labelBackgroundColor: t.ink },
             horzLine: { color: t.ink, labelBackgroundColor: t.ink },
           },
-          localization: { locale: "en-US", priceFormatter: fmt.axis },
+          // Formatting is set per series (below) so a left-axis series can use its own units.
+          localization: { locale: "en-US" },
         });
 
         const map = new Map<string, ISeriesApi<"Line">>();
         series.forEach((s, k) => {
-          const own = s.format ? FORMATS[s.format] : null;
+          const own = s.format ? FORMATS[s.format] : fmt;
           const line = chart.addSeries(lw.LineSeries, {
             color: resolve(s.color),
             lineWidth: s.lineWidth ?? 2,
@@ -162,7 +164,7 @@ export default function TvChart({
             lastValueVisible: true,
             title: "",
             ...(s.leftAxis ? { priceScaleId: "left" } : {}),
-            ...(own ? { priceFormat: { type: "custom" as const, formatter: own.axis, minMove: 0.01 } } : {}),
+            priceFormat: { type: "custom" as const, formatter: own.axis, minMove: 0.01 },
             ...(fixedRange && !s.leftAxis ? { autoscaleInfoProvider: () => ({ priceRange: { minValue: fixedRange[0], maxValue: fixedRange[1] } }) } : {}),
           });
           line.setData(
@@ -197,11 +199,10 @@ export default function TvChart({
         });
 
         // Remember manual zooms/pans (debounced) as a "custom" window.
-        let saveTimer: ReturnType<typeof setTimeout> | undefined;
         chart.timeScale().subscribeVisibleTimeRangeChange((r) => {
           if (!r || Date.now() < quietUntil.current) return;
-          clearTimeout(saveTimer);
-          saveTimer = setTimeout(() => {
+          clearTimeout(saveTimer.current);
+          saveTimer.current = setTimeout(() => {
             setView({ from: String(r.from), to: String(r.to) });
             setRange("custom");
           }, 400);
@@ -231,6 +232,7 @@ export default function TvChart({
     const chart = chartRef.current;
     if (!chart || !dates.length) return;
     quietUntil.current = Date.now() + 600;
+    clearTimeout(saveTimer.current); // a preset beats any half-recorded manual zoom
     if (id === "custom") {
       const v = viewRef.current;
       if (v) chart.timeScale().setVisibleRange({ from: v.from as Time, to: v.to as Time });
@@ -244,6 +246,8 @@ export default function TvChart({
   }
 
   function applyHidden(h: Set<string>) {
+    // Showing/hiding an axis resizes the plot; that's not a user zoom.
+    quietUntil.current = Date.now() + 600;
     for (const [id, line] of seriesRef.current) line.applyOptions({ visible: !h.has(id) });
     // The left axis only appears while a series on it is visible.
     const leftOn = series.some((s) => s.leftAxis && !h.has(s.id));
