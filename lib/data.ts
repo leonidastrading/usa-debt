@@ -4,7 +4,7 @@ import { analyzeAuctions, CMT_FOR_TERM } from "./auctions.ts";
 import { priceIndex } from "./bonds.ts";
 import { fredMany, fredSeries, HISTORY_START, type Obs } from "./fred.ts";
 import { computeIndicators, computeRegimes, currentCurve, FRED_IDS } from "./regimes.ts";
-import { asOf } from "./stats.ts";
+import { asOf, coalesce } from "./stats.ts";
 import { getAuctions, getAvgRates, getDebtHistory, getDebtTotals, getInterestHistory, getMaturityProfile, isoDaysAgo } from "./treasury.ts";
 
 async function settle<T>(label: string, p: Promise<T>): Promise<T | null> {
@@ -56,9 +56,10 @@ const round = (v: number, d: number) => (Number.isFinite(v) ? Math.round(v * 10 
 
 /** Bond prices/yields, total debt and interest expense histories for the dashboard charts. */
 export async function getHistoryCharts(fred: Record<string, Obs[]>) {
-  const [debt, interest] = await Promise.all([
+  const [debt, interest, fed] = await Promise.all([
     settle("debt history", getDebtHistory()),
     settle("interest history", getInterestHistory()),
+    fredMany(["DFEDTARU", "DFEDTARL", "DFEDTAR", "EFFR"], HISTORY_START),
   ]);
 
   // Bonds: one calendar (10Y dates), yields and price indices for 2Y / 10Y / 30Y.
@@ -93,8 +94,24 @@ export async function getHistoryCharts(fred: Record<string, Obs[]>) {
     };
   }
 
+  // Fed policy rate: target range (a single target before Dec 2008) and the effective rate.
+  const single = asOf(fed.DFEDTAR, dates, 10);
+  const fedChart = {
+    dates,
+    upper: coalesce(asOf(fed.DFEDTARU, dates, 10), single).map((v) => round(v, 2)),
+    lower: coalesce(asOf(fed.DFEDTARL, dates, 10), single).map((v) => round(v, 2)),
+    effective: asOf(fed.EFFR, dates, 5).map((v) => round(v, 2)),
+  };
+  // Most recent change in the upper bound.
+  let lastMove: { date: string; bp: number } | null = null;
+  for (let i = fedChart.upper.length - 1; i > 0; i--) {
+    const a = fedChart.upper[i], b = fedChart.upper[i - 1];
+    if (Number.isFinite(a) && Number.isFinite(b) && a !== b) { lastMove = { date: dates[i], bp: Math.round((a - b) * 100) }; break; }
+  }
+
   return {
     bonds,
+    fed: { ...fedChart, lastMove },
     debt: debt && debt.dates.length
       ? { dates: debt.dates, total: debt.total.map((v) => round(v / 1e12, 4)), public: debt.public.map((v) => round(v / 1e12, 4)) }
       : null,

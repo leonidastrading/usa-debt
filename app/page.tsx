@@ -195,6 +195,37 @@ export default async function Dashboard() {
 
       <div className="section card">
         <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <h2>Fed interest rate</h2>
+          {(() => {
+            const up = lastOf(history.fed.upper).v, lo = lastOf(history.fed.lower).v;
+            if (!Number.isFinite(up)) return null;
+            const m = history.fed.lastMove;
+            return (
+              <span className="small ink2">
+                Target {up === lo ? `${fmt(up, 2)}%` : `${fmt(lo, 2)}–${fmt(up, 2)}%`}
+                {m ? ` · last move ${m.bp > 0 ? "+" : "−"}${Math.abs(m.bp)}bp on ${dateLabel(m.date)}` : ""}
+              </span>
+            );
+          })()}
+        </div>
+        <TvChart
+          dates={history.fed.dates}
+          series={[
+            { id: "upper", name: "Target, top", color: "var(--s1)", step: true, values: history.fed.upper },
+            { id: "lower", name: "Target, bottom", color: "var(--s1)", step: true, lineStyle: "dashed", values: history.fed.lower },
+            { id: "effr", name: "Effective fed funds", color: "var(--s2)", lineWidth: 1, values: history.fed.effective },
+          ]}
+          persistKey="fed-chart"
+          ariaLabel="Federal funds target range and effective rate"
+          format="pct"
+          defaultRange="All"
+          height={380}
+          help="The Fed's policy rate (FRED). The effective rate is what banks actually pay each other overnight; it should sit inside the target range. Compare with the 2-year yield above to see what the market expects next."
+        />
+      </div>
+
+      <div className="section card">
+        <div className="section-head" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
           <h2>Federal debt</h2>
           {history.debt && (() => {
             const now = lastOf(history.debt.total).v, ago = yearAgo(history.debt.dates, history.debt.total);

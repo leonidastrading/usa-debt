@@ -20,6 +20,8 @@ export type TvSeries = {
   format?: TvFormat;
   lineWidth?: 1 | 2 | 3;
   lineStyle?: "solid" | "dashed" | "dotted";
+  /** Draw as a step line (for rates set in discrete moves). */
+  step?: boolean;
 };
 
 export type TvFormat = "score" | "pct" | "trillions" | "index" | "level";
@@ -154,6 +156,7 @@ export default function TvChart({
           const line = chart.addSeries(lw.LineSeries, {
             color: resolve(s.color),
             lineWidth: s.lineWidth ?? 2,
+            lineType: s.step ? lw.LineType.WithSteps : lw.LineType.Simple,
             lineStyle: s.lineStyle === "dashed" ? lw.LineStyle.Dashed : s.lineStyle === "dotted" ? lw.LineStyle.Dotted : lw.LineStyle.Solid,
             priceLineVisible: false,
             lastValueVisible: true,
