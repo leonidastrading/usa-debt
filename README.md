@@ -7,6 +7,7 @@ An early-warning and decision tool for US bond-market stress. It doesn't forecas
 | Page | What it does |
 |---|---|
 | **Dashboard** (`/`) | Four regime scores (fiscal stress, liquidity stress, inflation scare, growth scare) on a 0–100 scale. Each has a "why this score" breakdown. Also: regime history with past stress events marked; separate TradingView charts of Treasury bond prices and yields for the 2Y/10Y/30Y, the Fed funds target range and effective rate, total federal debt since 2006, and trailing 12-month interest payments; a calibration table, 13 risk indicators with sparklines, and Treasury auction demand (bid-to-cover, indirect share, upcoming auctions). |
+| **Market top** (`/market-top`) | Nine warning lights in three groups. **Fuel**: CAPE, Excess CAPE Yield, Buffett indicator, margin-debt growth. **Pin**: yield curve, Fed tightening. **Cracks**: S&P vs its 10-month average, credit-spread widening, Sahm rule. They combine into a phase (normal / expensive / expensive and cracking / cracks with fair valuations), with a live backtest since 1990 and a chart and description for every light. |
 | **Scenarios** (`/scenarios`) | **Debt rollover**: rolls the actual marketable-debt maturity schedule (MSPD) through six preset rate scenarios plus one you define, and projects interest cost, interest/GDP and debt/GDP over 10 years. **Hedge stress test**: Black–Scholes stress grid and regime-shaped shocks for your SPX option legs (default sample: a 95/85 put spread). |
 | **Playbook** (`/playbook`) | For each regime, write your actions and set a trigger threshold. When a score crosses it, the dashboard shows those actions. |
 | **News** (`/news`) | Headlines from the last 7 days on auctions, yields, debt and deficits, the Fed and global bonds, plus Fed press releases. With an API key you also get an AI digest. |
@@ -16,6 +17,7 @@ An early-warning and decision tool for US bond-market stress. It doesn't forecas
 
 - **FRED**: Treasury yields, 10Y breakeven, 10Y real yield, Kim–Wright term premium, broad dollar, SOFR, IORB, reverse repo, TGA, Baa and high-yield spreads, VIX, S&P 500, Fed funds target range and effective rate, GDP
 - **Treasury FiscalData**: auction results and schedule, debt to the penny (daily debt history), monthly interest expense, average interest rates, the maturity detail behind the rollover model (MSPD table 3)
+- **Market top**: Robert Shiller's monthly data (shillerdata.com; multpl.com as backup) for CAPE, ECY and the long S&P history; FINRA margin statistics; FRED for Fed Z.1 equity values, Sahm rule, Baa spread, 10Y−2Y and fed funds
 - **News**: Google News RSS searches and the Federal Reserve press-release feed
 
 Data is end-of-day. Pages are cached for 6 hours (news for 3), and a Vercel Cron job refreshes everything after the US close on weekdays.

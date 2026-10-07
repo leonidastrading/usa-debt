@@ -24,7 +24,7 @@ export type TvSeries = {
   step?: boolean;
 };
 
-export type TvFormat = "score" | "pct" | "trillions" | "index" | "level";
+export type TvFormat = "score" | "pct" | "pct0" | "trillions" | "index" | "level";
 
 type Props = {
   dates: string[];
@@ -41,6 +41,8 @@ type Props = {
   events?: { date: string; label: string }[];
   /** "indexed": rebase every series to 100 at the left edge of the visible range. */
   priceMode?: "normal" | "indexed";
+  /** Log scale for the left axis (e.g. the S&P 500 over decades). */
+  leftLog?: boolean;
   help?: string;
 };
 
@@ -53,6 +55,7 @@ const FORMATS: Record<TvFormat, { axis: (v: number) => string; legend: (v: numbe
   pct: { axis: (v) => `${v.toFixed(2)}%`, legend: (v) => `${v.toFixed(2)}%` },
   trillions: { axis: (v) => `$${v.toFixed(v < 10 ? 2 : 1)}T`, legend: (v) => `$${v.toFixed(2)}T` },
   index: { axis: (v) => v.toFixed(1), legend: (v) => v.toFixed(1) },
+  pct0: { axis: (v) => `${v.toFixed(0)}%`, legend: (v) => `${v.toFixed(0)}%` },
   level: { axis: (v) => Math.round(v).toLocaleString("en-US"), legend: (v) => Math.round(v).toLocaleString("en-US") },
 };
 
@@ -82,7 +85,7 @@ function theme() {
 
 export default function TvChart({
   dates, series, persistKey, ariaLabel, format = "index", height = 400, defaultRange = "3Y",
-  fixedRange, refLines = NO_LINES, events = NO_EVENTS, priceMode = "normal", help,
+  fixedRange, refLines = NO_LINES, events = NO_EVENTS, priceMode = "normal", leftLog = false, help,
 }: Props) {
   const fmt = FORMATS[format];
   const box = useRef<HTMLDivElement>(null);
@@ -137,7 +140,10 @@ export default function TvChart({
             scaleMargins: { top: 0.06, bottom: 0.04 },
             mode: priceMode === "indexed" ? lw.PriceScaleMode.IndexedTo100 : lw.PriceScaleMode.Normal,
           },
-          leftPriceScale: { visible: false, borderColor: t.axis, scaleMargins: { top: 0.06, bottom: 0.04 } },
+          leftPriceScale: {
+            visible: false, borderColor: t.axis, scaleMargins: { top: 0.06, bottom: 0.04 },
+            mode: leftLog ? lw.PriceScaleMode.Logarithmic : lw.PriceScaleMode.Normal,
+          },
           // Allow very dense bars so "All" can fit 20 years of daily data.
           timeScale: { borderColor: t.axis, rightOffset: 2, minBarSpacing: 0.01 },
           // Mouse wheel zooms, drag pans, pinch zooms on touch.
@@ -226,7 +232,7 @@ export default function TvChart({
     })();
 
     return () => { disposed = true; cleanup(); };
-  }, [dates, series, events, height, format, fixedRange, refLines, priceMode]);
+  }, [dates, series, events, height, format, fixedRange, refLines, priceMode, leftLog]);
 
   function applyRange(id: string) {
     const chart = chartRef.current;

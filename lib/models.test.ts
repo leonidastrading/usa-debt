@@ -118,3 +118,18 @@ test("correlation: perfect, inverse, and NaN-tolerant", async () => {
   assert.ok(Math.abs(correlation(a, b) - 1) < 1e-9);
   assert.ok(Number.isNaN(correlation(a.slice(0, 10), a.slice(0, 10))));
 });
+
+test("market-top inputs: Shiller dates and multpl tables parse correctly", async () => {
+  const { parseMultplTable, phaseOf } = await import("./tops.ts");
+  const html = '<tr><td class="left">Oct 6, 2026</td><td class="right">&#x2002;41.90</td></tr>' +
+    '<tr><td>Oct 1, 2026</td><td>41.00</td></tr><tr><td>Sep 1, 2026</td><td>\n7,691.10</td></tr>';
+  const m = parseMultplTable(html);
+  assert.equal(m.get("2026-10"), 41.9);
+  assert.equal(m.get("2026-09"), 7691.1);
+  assert.equal(phaseOf(100, 0), "expensive");
+  assert.equal(phaseOf(100, 50), "breakdown");
+  assert.equal(phaseOf(25, 50), "normal");
+  assert.equal(phaseOf(25, 83), "cracking");
+  assert.equal(phaseOf(25, 0), "normal");
+  assert.equal(phaseOf(NaN, 0), null);
+});
