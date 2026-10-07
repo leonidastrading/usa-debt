@@ -108,3 +108,13 @@ test("Treasury yield curve CSV fills days FRED hasn't published yet", async () =
   assert.deepEqual(merged.DGS10.map((o) => o.date), ["2026-10-02", "2026-10-05", "2026-10-06"]);
   assert.equal(merged.DGS30, undefined); // only series we asked FRED for are topped up
 });
+
+test("correlation: perfect, inverse, and NaN-tolerant", async () => {
+  const { correlation } = await import("./stats.ts");
+  const a = Array.from({ length: 50 }, (_, i) => i);
+  assert.ok(Math.abs(correlation(a, a.map((x) => 2 * x + 1)) - 1) < 1e-9);
+  assert.ok(Math.abs(correlation(a, a.map((x) => 100 - x)) + 1) < 1e-9);
+  const b = a.map((x, i) => (i % 5 === 0 ? NaN : x));
+  assert.ok(Math.abs(correlation(a, b) - 1) < 1e-9);
+  assert.ok(Number.isNaN(correlation(a.slice(0, 10), a.slice(0, 10))));
+});

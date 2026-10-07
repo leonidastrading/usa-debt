@@ -109,3 +109,17 @@ export function std(a: number[]): number {
   for (const v of a) if (Number.isFinite(v)) { n++; s += (v - m) ** 2; }
   return n > 1 ? Math.sqrt(s / (n - 1)) : NaN;
 }
+
+/** Pearson correlation over the indices where both arrays are finite; NaN if fewer than `minN`. */
+export function correlation(a: number[], b: number[], from = 0, minN = 30): number {
+  let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+  for (let i = Math.max(0, from); i < Math.min(a.length, b.length); i++) {
+    const x = a[i], y = b[i];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    n++; sa += x; sb += y; saa += x * x; sbb += y * y; sab += x * y;
+  }
+  if (n < minN) return NaN;
+  const cov = sab / n - (sa / n) * (sb / n);
+  const va = saa / n - (sa / n) ** 2, vb = sbb / n - (sb / n) ** 2;
+  return va > 0 && vb > 0 ? cov / Math.sqrt(va * vb) : NaN;
+}

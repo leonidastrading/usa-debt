@@ -2,7 +2,22 @@
 
 import { useMemo } from "react";
 import TvChart, { type TvSeries } from "@/components/TvChart";
+import { correlation, diff, pctChange } from "@/lib/stats";
 import { usePersisted } from "@/lib/usePersisted";
+
+const CORR_WINDOWS = [
+  { id: "1y", label: "1 year", years: 1 },
+  { id: "3y", label: "3 years", years: 3 },
+  { id: "all", label: "Since 2016", years: 0 },
+];
+
+/** Plain-words strength of a correlation. */
+function strength(r: number) {
+  const a = Math.abs(r);
+  if (!Number.isFinite(r)) return "–";
+  const word = a >= 0.7 ? "strong" : a >= 0.4 ? "moderate" : a >= 0.2 ? "weak" : "none";
+  return word === "none" ? "no clear link" : `${word} ${r > 0 ? "positive" : "negative"}`;
+}
 
 const REF_LINES = [{ price: 95, title: "Alert 95" }, { price: 85, title: "Elevated 85" }];
 const FIXED: [number, number] = [0, 100];
@@ -14,23 +29,34 @@ const FIXED: [number, number] = [0, 100];
 function Composite({ dates, parts, overlays }: { dates: string[]; parts: TvSeries[]; overlays: TvSeries[] }) {
   const [picked, setPicked] = usePersisted<string[]>("composite:parts", parts.map((p) => p.id));
   const [mode, setMode] = usePersisted<"avg" | "max">("composite:mode", "avg");
+  const [inverted, setInverted] = usePersisted("composite:inverted", false);
   const activeKey = parts.filter((p) => picked.includes(p.id)).map((p) => p.id).join(",");
 
   // Keyed on the ticked ids (a string) so the chart only rebuilds when the selection changes.
-  const { active, series } = useMemo(() => {
+  const { active, series, corr } = useMemo(() => {
     const active = parts.filter((p) => activeKey.split(",").includes(p.id));
     const values = dates.map((_, i) => {
       const vs = active.map((p) => p.values[i]).filter(Number.isFinite);
       if (!vs.length) return NaN;
       const v = mode === "max" ? Math.max(...vs) : vs.reduce((a, b) => a + b, 0) / vs.length;
-      return Math.round(v * 10) / 10;
+      return Math.round((inverted ? 100 - v : v) * 10) / 10;
     });
-    const series: TvSeries[] = [
-      { id: "composite", name: mode === "max" ? "Highest regime" : "Composite", color: "var(--ink)", values },
-      ...overlays,
-    ];
-    return { active, series };
-  }, [dates, parts, overlays, activeKey, mode]);
+    const name = `${mode === "max" ? "Highest regime" : "Composite"}${inverted ? " (inverted)" : ""}`;
+    const series: TvSeries[] = [{ id: "composite", name, color: "var(--ink)", values }, ...overlays];
+
+    // Correlation with the S&P 500: 1-month changes (does stress rising coincide with
+    // stocks falling?) and raw levels, over a few look-back windows.
+    const spx = overlays.find((o) => o.id === "spx")?.values ?? [];
+    const dComp = diff(values, 20), dSpx = pctChange(spx, 20);
+    const last = Date.parse(dates[dates.length - 1] ?? "");
+    const corr = CORR_WINDOWS.map((w) => {
+      const from = w.years
+        ? dates.findIndex((d) => d >= new Date(last - w.years * 365.25 * 86400000).toISOString().slice(0, 10))
+        : 0;
+      return { ...w, changes: correlation(dComp, dSpx, from, 60), levels: correlation(values, spx, from, 60) };
+    });
+    return { active, series, corr };
+  }, [dates, parts, overlays, activeKey, mode, inverted]);
 
   const toggle = (id: string) => setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -41,9 +67,16 @@ function Composite({ dates, parts, overlays }: { dates: string[]; parts: TvSerie
           <h3>Composite</h3>
           <p className="small muted">One line built from the regimes you tick, whatever is shown on the chart above.</p>
         </div>
-        <div className="seg" role="group" aria-label="Combine by">
-          <button aria-pressed={mode === "avg"} onClick={() => setMode("avg")}>Average</button>
-          <button aria-pressed={mode === "max"} onClick={() => setMode("max")}>Highest</button>
+        <div className="row" style={{ gap: 8 }}>
+          <div className="seg" role="group" aria-label="Combine by">
+            <button aria-pressed={mode === "avg"} onClick={() => setMode("avg")}>Average</button>
+            <button aria-pressed={mode === "max"} onClick={() => setMode("max")}>Highest</button>
+          </div>
+          <div className="seg" role="group" aria-label="Direction">
+            <button aria-pressed={inverted} onClick={() => setInverted(!inverted)} title="Plot 100 − score, so the line falls when stress rises">
+              {inverted ? "Inverted ✓" : "Invert"}
+            </button>
+          </div>
         </div>
       </div>
       <div className="row" role="group" aria-label="Include in composite" style={{ gap: 6, marginBottom: 10 }}>
@@ -60,6 +93,41 @@ function Composite({ dates, parts, overlays }: { dates: string[]; parts: TvSerie
           </label>
         ))}
       </div>
+      {active.length > 0 && (
+        <div className="table-wrap" style={{ marginBottom: 12 }}>
+          <table className="data" style={{ maxWidth: 720 }}>
+            <thead>
+              <tr>
+                <th>Correlation with S&amp;P 500</th>
+                {corr.map((c) => <th key={c.id} className="r">{c.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td title="Correlation of 1-month change in the line vs 1-month % change in the S&P 500">1-month changes</td>
+                {corr.map((c) => (
+                  <td key={c.id} className="r">
+                    <strong>{Number.isFinite(c.changes) ? c.changes.toFixed(2) : "–"}</strong>
+                    <div className="small muted">{strength(c.changes)}</div>
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td title="Correlation of the line's level vs the S&P 500 level. Trending series can look correlated by coincidence.">Levels</td>
+                {corr.map((c) => (
+                  <td key={c.id} className="r">
+                    {Number.isFinite(c.levels) ? c.levels.toFixed(2) : "–"}
+                    <div className="small muted">{strength(c.levels)}</div>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+          <p className="small muted" style={{ marginTop: 6 }}>
+            −1 = moves exactly opposite to stocks, +1 = moves with them. Trust the 1-month changes row more; levels can look linked just because both trend.
+          </p>
+        </div>
+      )}
       {active.length ? (
         <TvChart
           key={mode}
