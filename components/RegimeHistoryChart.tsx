@@ -11,7 +11,7 @@ const FIXED: [number, number] = [0, 100];
  * Composite of the regime scores you tick: their average, or the highest (worst) regime
  * each day. Independent of which lines are hidden on the main chart.
  */
-function Composite({ dates, parts }: { dates: string[]; parts: TvSeries[] }) {
+function Composite({ dates, parts, overlays }: { dates: string[]; parts: TvSeries[]; overlays: TvSeries[] }) {
   const [picked, setPicked] = usePersisted<string[]>("composite:parts", parts.map((p) => p.id));
   const [mode, setMode] = usePersisted<"avg" | "max">("composite:mode", "avg");
   const activeKey = parts.filter((p) => picked.includes(p.id)).map((p) => p.id).join(",");
@@ -25,9 +25,12 @@ function Composite({ dates, parts }: { dates: string[]; parts: TvSeries[] }) {
       const v = mode === "max" ? Math.max(...vs) : vs.reduce((a, b) => a + b, 0) / vs.length;
       return Math.round(v * 10) / 10;
     });
-    const series: TvSeries[] = [{ id: "composite", name: mode === "max" ? "Highest regime" : "Composite", color: "var(--ink)", values }];
+    const series: TvSeries[] = [
+      { id: "composite", name: mode === "max" ? "Highest regime" : "Composite", color: "var(--ink)", values },
+      ...overlays,
+    ];
     return { active, series };
-  }, [dates, parts, activeKey, mode]);
+  }, [dates, parts, overlays, activeKey, mode]);
 
   const toggle = (id: string) => setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -65,7 +68,7 @@ function Composite({ dates, parts }: { dates: string[]; parts: TvSeries[] }) {
           persistKey="composite-chart"
           ariaLabel="Composite regime score"
           format="score"
-          height={320}
+          height={640}
           fixedRange={FIXED}
           refLines={REF_LINES}
           help={mode === "max"
@@ -87,6 +90,8 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
 }) {
   // The composite uses the regime scores only, not optional overlays like the S&P 500 or VIX.
   const parts = useMemo(() => series.filter((s) => !s.optional), [series]);
+  // The S&P 500 can be overlaid on the composite too (switched on from its legend).
+  const overlays = useMemo(() => series.filter((s) => s.id === "spx"), [series]);
   return (
     <>
       <TvChart
@@ -101,7 +106,7 @@ export default function RegimeHistoryChart({ dates, series, events, height = 600
         refLines={REF_LINES}
         help="Scroll to zoom, drag to pan, pick a range button to reset. Your zoom and series choices are remembered. Arrows mark past stress events."
       />
-      <Composite dates={dates} parts={parts} />
+      <Composite dates={dates} parts={parts} overlays={overlays} />
     </>
   );
 }
