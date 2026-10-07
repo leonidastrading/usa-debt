@@ -230,3 +230,70 @@ export async function getInterestHistory(): Promise<InterestHistory> {
     intragovMonthly: dates.map((d) => byMonth.get(d)!.gov),
   };
 }
+
+// ---------- Same-day yield curve (fills FRED's one-day lag) ----------
+
+/** Treasury yield-curve CSV column -> FRED constant-maturity series it feeds. */
+const CURVE_COLUMNS: Record<string, string> = {
+  "3 Mo": "DGS3MO", "2 Yr": "DGS2", "3 Yr": "DGS3", "5 Yr": "DGS5",
+  "7 Yr": "DGS7", "10 Yr": "DGS10", "20 Yr": "DGS20", "30 Yr": "DGS30",
+};
+
+export function parseYieldCurveCsv(text: string): Record<string, { date: string; value: number }[]> {
+  const lines = text.trim().split(/\r?\n/);
+  const head = lines[0].split(",").map((h) => h.replace(/"/g, "").trim());
+  const out: Record<string, { date: string; value: number }[]> = {};
+  for (const line of lines.slice(1)) {
+    const cells = line.split(",");
+    const [m, d, y] = cells[0].split("/");
+    if (!y) continue;
+    const date = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    head.forEach((h, i) => {
+      const id = CURVE_COLUMNS[h];
+      const v = Number(cells[i]);
+      if (id && cells[i] !== "" && Number.isFinite(v)) (out[id] ??= []).push({ date, value: v });
+    });
+  }
+  for (const id in out) out[id].sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+async function yieldCurveMonth(yyyymm: string) {
+  const url =
+    "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/all/" +
+    `${yyyymm}?type=daily_treasury_yield_curve&field_tdr_date_value_month=${yyyymm}&page&_format=csv`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15000), next: { revalidate: REVALIDATE_SECONDS / 2 } });
+  if (!res.ok) throw new Error(`Treasury yield curve ${yyyymm}: HTTP ${res.status}`);
+  return parseYieldCurveCsv(await res.text());
+}
+
+/**
+ * The last two months of Treasury's daily par yield curve. Treasury posts each day's curve
+ * the same evening; FRED's DGS series (the same numbers) appear a day later. Month-scoped
+ * requests take ~1s; the whole-year file can take 15s+ when Treasury's cache is cold.
+ */
+export async function getTreasuryYieldCurve(now = new Date()) {
+  const ym = (d: Date) => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const prev = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const months = await Promise.all([yieldCurveMonth(ym(prev)), yieldCurveMonth(ym(now))]);
+  const out: Record<string, { date: string; value: number }[]> = {};
+  for (const m of months) for (const [id, obs] of Object.entries(m)) (out[id] ??= []).push(...obs);
+  for (const id in out) out[id].sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+/** Append Treasury observations newer than FRED's last one to each FRED series. */
+export function mergeNewer<T extends { date: string; value: number }>(
+  fred: Record<string, T[]>,
+  extra: Record<string, T[]>,
+): Record<string, T[]> {
+  const out = { ...fred };
+  for (const [id, obs] of Object.entries(extra)) {
+    if (!(id in out)) continue;
+    const base = out[id] ?? [];
+    const last = base.length ? base[base.length - 1].date : "";
+    const newer = obs.filter((o) => o.date > last);
+    if (newer.length) out[id] = [...base, ...newer];
+  }
+  return out;
+}

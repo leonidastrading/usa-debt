@@ -97,3 +97,14 @@ test("bond price: par at its own yield, falls when yields rise", async () => {
   const idx = priceIndex([{ date: "a", value: 4 }, { date: "b", value: 5 }, { date: "c", value: 4 }], 30);
   assert.ok(idx[1].value < 100 && idx[2].value > idx[1].value);
 });
+
+test("Treasury yield curve CSV fills days FRED hasn't published yet", async () => {
+  const { parseYieldCurveCsv, mergeNewer } = await import("./treasury.ts");
+  const csv = 'Date,"3 Mo","2 Yr","10 Yr","30 Yr"\n10/06/2026,4.21,4.79,5.27,5.64\n10/05/2026,4.22,4.84,5.31,5.66\n';
+  const curve = parseYieldCurveCsv(csv);
+  assert.deepEqual(curve.DGS10, [{ date: "2026-10-05", value: 5.31 }, { date: "2026-10-06", value: 5.27 }]);
+  const fred = { DGS10: [{ date: "2026-10-02", value: 5.28 }, { date: "2026-10-05", value: 5.31 }], VIXCLS: [] };
+  const merged = mergeNewer(fred, curve);
+  assert.deepEqual(merged.DGS10.map((o) => o.date), ["2026-10-02", "2026-10-05", "2026-10-06"]);
+  assert.equal(merged.DGS30, undefined); // only series we asked FRED for are topped up
+});

@@ -5,7 +5,7 @@ import { priceIndex } from "./bonds.ts";
 import { fredMany, fredSeries, HISTORY_START, type Obs } from "./fred.ts";
 import { computeIndicators, computeRegimes, currentCurve, FRED_IDS } from "./regimes.ts";
 import { asOf, coalesce } from "./stats.ts";
-import { getAuctions, getAvgRates, getDebtHistory, getDebtTotals, getInterestHistory, getMaturityProfile, isoDaysAgo } from "./treasury.ts";
+import { getAuctions, getAvgRates, getDebtHistory, getDebtTotals, getInterestHistory, getMaturityProfile, getTreasuryYieldCurve, isoDaysAgo, mergeNewer } from "./treasury.ts";
 
 async function settle<T>(label: string, p: Promise<T>): Promise<T | null> {
   try {
@@ -16,8 +16,14 @@ async function settle<T>(label: string, p: Promise<T>): Promise<T | null> {
   }
 }
 
+/** FRED series, topped up with Treasury's same-day yields so the latest close isn't a day late. */
+async function fredWithLatestYields(ids: string[], start: string) {
+  const [fred, curve] = await Promise.all([fredMany(ids, start), settle("treasury yield curve", getTreasuryYieldCurve())]);
+  return curve ? mergeNewer(fred, curve) : fred;
+}
+
 export async function getMarket() {
-  const data = await fredMany([...FRED_IDS], HISTORY_START);
+  const data = await fredWithLatestYields([...FRED_IDS], HISTORY_START);
   return {
     data,
     regimes: computeRegimes(data),
@@ -30,7 +36,7 @@ export async function getMarket() {
 export async function getAuctionData() {
   const [auctions, cmt] = await Promise.all([
     settle("auctions", getAuctions()),
-    fredMany(Object.values(CMT_FOR_TERM), isoDaysAgo(3 * 365 + 30)),
+    fredWithLatestYields(Object.values(CMT_FOR_TERM), isoDaysAgo(3 * 365 + 30)),
   ]);
   if (!auctions) return null;
   return analyzeAuctions(auctions, cmt, new Date().toISOString().slice(0, 10));
