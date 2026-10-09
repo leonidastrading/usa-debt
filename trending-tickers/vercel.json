@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/snapshot", "schedule": "0 13 * * *" },
+    { "path": "/api/snapshot", "schedule": "0 14 * * *" }
+  ]
+}
