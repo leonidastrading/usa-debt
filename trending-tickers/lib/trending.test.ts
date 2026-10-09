@@ -46,12 +46,12 @@ test("short company names for news search", () => {
 test("parseRss strips the source suffix", () => {
   const xml = `<rss><channel><item><title>Big news - Reuters</title><link>https://x</link><pubDate>Thu, 08 Oct 2026 12:00:00 GMT</pubDate><source url="https://reuters.com">Reuters</source></item></channel></rss>`;
   assert.deepEqual(parseRss(xml), [
-    { title: "Big news", link: "https://x", source: "Reuters", published: "2026-10-08T12:00:00.000Z" },
+    { title: "Big news", link: "https://x", source: "Reuters", published: "2026-10-08T12:00:00.000Z", summary: "" },
   ]);
 });
 
 test("headline filler is dropped and the newest come first", () => {
-  const h = (title: string, published: string) => ({ title, link: "https://x", source: "", published });
+  const h = (title: string, published: string) => ({ title, link: "https://x", source: "", published, summary: "" });
   const out = latestHeadlines([
     h("15,700 Shares in AST SpaceMobile, Inc. $ASTS Bought by REX Advisers LLC", "2026-10-08T20:00:00Z"),
     h("Professional Advisory Services Inc. Lowers Stock Holdings in AT&T Inc.", "2026-10-08T21:00:00Z"),
@@ -65,4 +65,11 @@ test("headline filler is dropped and the newest come first", () => {
   ]);
   assert.equal(sourceName("https://finance.yahoo.com/news/x.html"), "Yahoo Finance");
   assert.equal(sourceName("https://www.example.com/a"), "example.com");
+});
+
+test("parseRss decodes hex entities and strips HTML from summaries", () => {
+  const xml = `<rss><item><title>OpenAI&#x2019;s revenue</title><link>https://x</link><description><![CDATA[<p>Chips  &amp; AI fell.</p>]]></description></item></rss>`;
+  const [item] = parseRss(xml);
+  assert.equal(item.title, "OpenAI’s revenue");
+  assert.equal(item.summary, "Chips & AI fell.");
 });

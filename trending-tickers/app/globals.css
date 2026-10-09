@@ -41,6 +41,14 @@ a:hover { text-decoration: underline; }
 h1 { margin: 0; font-size: clamp(26px, 4vw, 36px); line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance; }
 .lede { margin: 12px 0 0; max-width: 680px; color: var(--ink-2); }
 
+.market { margin-top: 24px; padding: 18px 20px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.market h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.stories { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.stories li { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stories a { color: var(--ink); font-weight: 600; line-height: 1.35; }
+.stories p { margin: 0; color: var(--ink-2); font-size: 14px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.stories .meta { margin-top: auto; font-size: 13px; color: var(--muted); }
+
 .jump { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .jump a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--ink); font-weight: 600; font-size: 14px; }
 .jump a:hover { text-decoration: none; border-color: var(--accent); }
@@ -74,7 +82,13 @@ h1 { margin: 0; font-size: clamp(26px, 4vw, 36px); line-height: 1.15; letter-spa
 
 .footer { padding: 24px 0 48px; color: var(--muted); font-size: 13px; }
 
+@media (max-width: 800px) {
+  .stories { grid-template-columns: 1fr; gap: 16px; }
+  .stories li + li { padding-top: 16px; border-top: 1px solid var(--border); }
+}
+
 @media (max-width: 640px) {
+  .market { padding: 16px; }
   .card-head { padding: 16px; }
   .facts { width: 100%; gap: 16px; }
   .chart { height: 380px; }

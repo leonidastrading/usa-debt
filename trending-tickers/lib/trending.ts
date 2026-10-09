@@ -5,7 +5,7 @@ export const TOP_N = 5;
 export const EDITION_HOUR = 9; // 9 AM America/New_York
 const TZ = "America/New_York";
 
-export type Headline = { title: string; link: string; source: string; published: string };
+export type Headline = { title: string; link: string; source: string; published: string; summary: string };
 
 export type Ticker = {
   rank: number;
@@ -29,6 +29,8 @@ export type Edition = {
   /** New York calendar date of the edition, YYYY-MM-DD. */
   date: string;
   capturedAt: string;
+  /** Top stories about the market as a whole. */
+  market: Headline[];
   tickers: Ticker[];
 };
 
@@ -124,7 +126,7 @@ export function pickTop(symbols: StSymbol[], n = TOP_N): Omit<Ticker, "headlines
   return out;
 }
 
-async function fetchTrending(): Promise<StSymbol[]> {
+export async function fetchTrending(): Promise<StSymbol[]> {
   const res = await fetch("https://api.stocktwits.com/api/2/trending/symbols/equities.json", {
     headers: { "User-Agent": "Mozilla/5.0 (trending-tickers)", Accept: "application/json" },
     cache: "no-store",
@@ -145,7 +147,8 @@ const decode = (s: string) =>
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .trim();
 
 const tag = (xml: string, name: string) => {
@@ -168,6 +171,7 @@ export function parseRss(xml: string): Headline[] {
       link: tag(body, "link"),
       source,
       published: Number.isFinite(date) ? new Date(date).toISOString() : "",
+      summary: decode(tag(body, "description").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " "),
     });
   }
   return items;
@@ -213,7 +217,7 @@ export function latestHeadlines(items: Headline[], n = 3): Headline[] {
     .slice(0, n);
 }
 
-async function fetchRss(url: string): Promise<Headline[]> {
+export async function fetchRss(url: string): Promise<Headline[]> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (trending-tickers)", Accept: "application/rss+xml, application/xml" },
     cache: "no-store",
@@ -224,7 +228,7 @@ async function fetchRss(url: string): Promise<Headline[]> {
 
 // Yahoo Finance's per-ticker feed first (on-topic, and tolerant of cloud IPs); Google News when
 // Yahoo fails or has nothing.
-async function fetchHeadlines(t: { symbol: string; name: string; instrumentClass: string }): Promise<Headline[]> {
+export async function fetchHeadlines(t: { symbol: string; name: string; instrumentClass: string }): Promise<Headline[]> {
   try {
     const yahoo = await fetchRss(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(t.symbol)}&region=US&lang=en-US`);
     const picked = latestHeadlines(yahoo.map((h) => ({ ...h, source: h.source || sourceName(h.link) })));
@@ -239,14 +243,4 @@ async function fetchHeadlines(t: { symbol: string; name: string; instrumentClass
   } catch {
     return [];
   }
-}
-
-// ---------- Edition ----------
-
-export async function buildEdition(date: string): Promise<Edition> {
-  const top = pickTop(await fetchTrending());
-  // One ticker at a time: news feeds throttle bursts from cloud IPs.
-  const tickers: Ticker[] = [];
-  for (const t of top) tickers.push({ ...t, headlines: await fetchHeadlines(t) });
-  return { date, capturedAt: new Date().toISOString(), tickers };
 }

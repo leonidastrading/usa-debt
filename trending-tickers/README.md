@@ -1,7 +1,8 @@
 # Trending Five
 
 Every morning at 9 AM New York time, this app takes the top 5 tickers from
-[Stocktwits' trending list](https://stocktwits.com/sentiment) and shows them one after another, each with:
+[Stocktwits' trending list](https://stocktwits.com/sentiment) and shows them one after another. At the top are the day's 3 biggest stories about the market as a whole (CNBC and
+Yahoo Finance, picked for being about the overall market rather than one company). Each ticker gets:
 
 - a live, interactive TradingView chart (5 days of 15-minute bars to start; change the range on the chart),
 - Stocktwits' summary of why it's trending,

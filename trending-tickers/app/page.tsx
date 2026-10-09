@@ -1,6 +1,6 @@
 import TradingViewChart from "@/components/TradingViewChart";
 import { getEdition } from "@/lib/edition";
-import { currentEditionDate, type Edition, type Ticker } from "@/lib/trending";
+import { currentEditionDate, type Edition, type Headline, type Ticker } from "@/lib/trending";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,7 @@ export default async function Page() {
           {edition ? <>as of {fmtTime(edition.capturedAt)} ET</> : "at 9 AM ET"}, with a live chart and why each one is
           trending. A new list arrives at 9 AM New York time every day.
         </p>
+        {edition && edition.market.length > 0 && <MarketStories stories={edition.market} now={Date.parse(edition.capturedAt)} />}
         {edition && (
           <nav className="jump" aria-label="Tickers">
             {edition.tickers.map((t) => (
@@ -123,6 +124,28 @@ function TickerCard({ t, now }: { t: Ticker; now: number }) {
           </ul>
         )}
       </div>
+    </section>
+  );
+}
+
+function MarketStories({ stories, now }: { stories: Headline[]; now: number }) {
+  return (
+    <section className="market" aria-labelledby="market-title">
+      <h2 id="market-title">The market this morning</h2>
+      <ol className="stories">
+        {stories.map((h) => (
+          <li key={h.link}>
+            <a href={h.link} target="_blank" rel="noreferrer">
+              {h.title}
+            </a>
+            {h.summary && <p>{h.summary}</p>}
+            <span className="meta">
+              {h.source}
+              {h.published && <> · {fmtAgo(h.published, now)}</>}
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
