@@ -5,7 +5,7 @@ Every morning at 9 AM New York time, this app takes the top 5 tickers from
 
 - a live, interactive TradingView chart (5 days of 15-minute bars to start; change the range on the chart),
 - Stocktwits' summary of why it's trending,
-- the three latest headlines about it from Google News.
+- the three latest headlines about it from Yahoo Finance (Google News as a fallback).
 
 ## How the 9 AM list works
 

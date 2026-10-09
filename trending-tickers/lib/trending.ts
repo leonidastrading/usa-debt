@@ -182,25 +182,71 @@ export function shortName(name: string): string {
     .trim();
 }
 
+const SOURCE_NAMES: Record<string, string> = {
+  "finance.yahoo.com": "Yahoo Finance",
+  "stocktwits.com": "Stocktwits",
+  "247wallst.com": "24/7 Wall St.",
+  "fool.com": "The Motley Fool",
+  "investors.com": "Investor's Business Daily",
+  "barrons.com": "Barron's",
+  "zacks.com": "Zacks",
+  "tikr.com": "TIKR",
+};
+
+export function sourceName(link: string): string {
+  try {
+    const host = new URL(link).hostname.replace(/^www\./, "");
+    return SOURCE_NAMES[host] ?? host;
+  } catch {
+    return "";
+  }
+}
+
+// Institutional-holdings filings ("XYZ Advisors buys 15,700 shares of …") crowd out real news.
+const FILLER =
+  /\b((shares?|stock|stake|position)\b.*\b(bought|sold|acquired|purchased|trimmed|increased|decreased|reduced|raised|lowered) by|(buys|sells|acquires|purchases|trims|raises|lowers|boosts|cuts|reduces|increases)\b.*\b(stake|position|holdings|[\d,]+ shares)|stock holdings|position in|stake in)\b/i;
+
+export function latestHeadlines(items: Headline[], n = 3): Headline[] {
+  return items
+    .filter((h) => h.link && !FILLER.test(h.title))
+    .sort((a, b) => b.published.localeCompare(a.published))
+    .slice(0, n);
+}
+
+async function fetchRss(url: string): Promise<Headline[]> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (trending-tickers)", Accept: "application/rss+xml, application/xml" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return parseRss(await res.text());
+}
+
+// Yahoo Finance's per-ticker feed first (on-topic, and tolerant of cloud IPs); Google News when
+// Yahoo fails or has nothing.
 async function fetchHeadlines(t: { symbol: string; name: string; instrumentClass: string }): Promise<Headline[]> {
+  try {
+    const yahoo = await fetchRss(`https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(t.symbol)}&region=US&lang=en-US`);
+    const picked = latestHeadlines(yahoo.map((h) => ({ ...h, source: h.source || sourceName(h.link) })));
+    if (picked.length) return picked;
+  } catch {}
   const name = shortName(t.name);
   const query = t.instrumentClass === "Stock" ? `"${name}" stock` : `"${t.symbol}" ${name}`;
-  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:2d`)}&hl=en-US&gl=US&ceid=US:en`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return [];
-  return parseRss(await res.text())
-    .sort((a, b) => b.published.localeCompare(a.published))
-    .slice(0, 3);
+  try {
+    return latestHeadlines(
+      await fetchRss(`https://news.google.com/rss/search?q=${encodeURIComponent(`${query} when:2d`)}&hl=en-US&gl=US&ceid=US:en`),
+    );
+  } catch {
+    return [];
+  }
 }
 
 // ---------- Edition ----------
 
 export async function buildEdition(date: string): Promise<Edition> {
   const top = pickTop(await fetchTrending());
-  const headlines = await Promise.allSettled(top.map(fetchHeadlines));
-  return {
-    date,
-    capturedAt: new Date().toISOString(),
-    tickers: top.map((t, i) => ({ ...t, headlines: headlines[i].status === "fulfilled" ? headlines[i].value : [] })),
-  };
+  // One ticker at a time: news feeds throttle bursts from cloud IPs.
+  const tickers: Ticker[] = [];
+  for (const t of top) tickers.push({ ...t, headlines: await fetchHeadlines(t) });
+  return { date, capturedAt: new Date().toISOString(), tickers };
 }

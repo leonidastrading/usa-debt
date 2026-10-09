@@ -3,6 +3,6 @@
 import { unstable_cache } from "next/cache";
 import { buildEdition, type Edition } from "./trending.ts";
 
-export const getEdition: (date: string) => Promise<Edition> = unstable_cache(buildEdition, ["edition-v1"], {
+export const getEdition: (date: string) => Promise<Edition> = unstable_cache(buildEdition, ["edition-v2"], {
   revalidate: 60 * 60 * 48,
 });

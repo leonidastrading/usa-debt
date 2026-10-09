@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="wrap">{children}</main>
         <footer className="footer">
           <div className="wrap">
-            Trending list and summaries: Stocktwits. Headlines: Google News. Charts: TradingView. Refreshed daily at 9 AM New
+            Trending list and summaries: Stocktwits. Headlines: Yahoo Finance and Google News. Charts: TradingView. Refreshed daily at 9 AM New
             York time. Not investment advice.
           </div>
         </footer>

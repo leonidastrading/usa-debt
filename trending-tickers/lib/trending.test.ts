@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { currentEditionDate, nyClock, parseRss, pickTop, previousDate, shortName, tvSymbol } from "./trending.ts";
+import { currentEditionDate, latestHeadlines, nyClock, parseRss, pickTop, previousDate, shortName, sourceName, tvSymbol } from "./trending.ts";
 
 test("New York clock handles daylight saving", () => {
   assert.deepEqual(nyClock(new Date("2026-10-09T13:05:00Z")), { date: "2026-10-09", hour: 9, minute: 5 }); // EDT
@@ -48,4 +48,21 @@ test("parseRss strips the source suffix", () => {
   assert.deepEqual(parseRss(xml), [
     { title: "Big news", link: "https://x", source: "Reuters", published: "2026-10-08T12:00:00.000Z" },
   ]);
+});
+
+test("headline filler is dropped and the newest come first", () => {
+  const h = (title: string, published: string) => ({ title, link: "https://x", source: "", published });
+  const out = latestHeadlines([
+    h("15,700 Shares in AST SpaceMobile, Inc. $ASTS Bought by REX Advisers LLC", "2026-10-08T20:00:00Z"),
+    h("Professional Advisory Services Inc. Lowers Stock Holdings in AT&T Inc.", "2026-10-08T21:00:00Z"),
+    h("T-Mobile US, Inc. $TMUS Stock Sold by Overbrook Management Corp", "2026-10-08T21:30:00Z"),
+    h("SpaceX Buys Wireless Spectrum For Starlink; Verizon, AT&T, T-Mobile Tumble", "2026-10-08T22:30:00Z"),
+    h("AST SpaceMobile Sinks 7% as Satellite Rival Clears Regulatory Hurdle", "2026-10-08T16:43:00Z"),
+  ]);
+  assert.deepEqual(out.map((x) => x.title), [
+    "SpaceX Buys Wireless Spectrum For Starlink; Verizon, AT&T, T-Mobile Tumble",
+    "AST SpaceMobile Sinks 7% as Satellite Rival Clears Regulatory Hurdle",
+  ]);
+  assert.equal(sourceName("https://finance.yahoo.com/news/x.html"), "Yahoo Finance");
+  assert.equal(sourceName("https://www.example.com/a"), "example.com");
 });
